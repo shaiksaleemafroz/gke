@@ -4,10 +4,10 @@ pipeline {
     }
     agent any
     environment {
-        PROJECT_ID = 'sivaraju'
+        PROJECT_ID = 'my-bigquery-project-434'
         CLUSTER_NAME = 'cluster-1'
-        LOCATION = 'us-central1-c'
-        CREDENTIALS_ID = '3ca65099-e4db-4fe1-9cbf-7dd07c2e95cf'
+        LOCATION = 'us-central1'
+        CREDENTIALS_ID = 'docker-hub-credentials' // Defined once, used in both Docker and GKE deploy
     }
     stages {
         stage("Checkout code") {
@@ -25,17 +25,25 @@ pipeline {
         stage("Push image") {
             steps {
                 script {
-                    docker.withRegistry('https://registry.hub.docker.com', 'afroz2022') {
-                            myapp.push("latest")
-                            myapp.push("${env.BUILD_ID}")
+                    docker.withRegistry('https://registry.hub.docker.com', env.CREDENTIALS_ID) {
+                        myapp.push("latest")
+                        myapp.push("${env.BUILD_ID}")
                     }
                 }
             }
         }
         stage('Deploy to GKE') {
-            steps{
+            steps {
                 sh "sed -i 's/hello:latest/hello:${env.BUILD_ID}/g' deployment.yaml"
-                step([$class: 'KubernetesEngineBuilder', projectId: env.PROJECT_ID, clusterName: env.CLUSTER_NAME, location: env.LOCATION, manifestPattern: 'deployment.yaml', credentialsId: env.CREDENTIALS_ID, verifyDeployments: true])
+                step([
+                    $class: 'KubernetesEngineBuilder',
+                    projectId: env.PROJECT_ID,
+                    clusterName: env.CLUSTER_NAME,
+                    location: env.LOCATION,
+                    manifestPattern: 'deployment.yaml',
+                    credentialsId: env.CREDENTIALS_ID, // Using the same credentials ID here if it's a GCP service account
+                    verifyDeployments: true
+                ])
             }
         }
     }
